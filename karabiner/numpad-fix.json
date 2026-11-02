@@ -1,0 +1,16 @@
+{
+  "description": "小键盘数字键始终输出数字 (绕过 macOS NumLock 状态机)",
+  "manipulators": [
+    { "type": "basic", "from": { "key_code": "keypad_1",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "1" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_2",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "2" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_3",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "3" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_4",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "4" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_5",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "5" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_6",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "6" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_7",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "7" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_8",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "8" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_9",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "9" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_0",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "0" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_decimal", "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "period" } ] }
+  ]
+}

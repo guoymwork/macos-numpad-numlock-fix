@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+*.swp
+
+# 诊断输出
+diagnose-report.txt
+*_report.txt
+
+# 临时文件
+*.tmp
+*.log
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
