@@ -38,7 +38,7 @@ ioreg -l -w0 -r -c IOUSBDevice 2>/dev/null \
 
 echo
 echo "【辅助功能 / 输入相关设置】"
-for k in mouseKey slowKey stickyKey; do
+for k in mouseDriver slowKey stickyKey; do
     V=$(defaults read com.apple.universalaccess "$k" 2>/dev/null)
     [ -n "$V" ] && echo "  $k = $V" || echo "  $k = (未设置, 默认关闭)"
 done
@@ -68,7 +68,19 @@ echo "【Karabiner-Elements】"
 if [ -d /Applications/Karabiner-Elements.app ]; then
     echo "  版本     : $(defaults read /Applications/Karabiner-Elements.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null)"
     echo "  进程     : $(pgrep -fl Karabiner 2>/dev/null | wc -l | tr -d ' ') 个"
-    echo "  权限状态 : $(cat "$HOME/.local/share/karabiner/tmp/"*.json 2>/dev/null || echo '(无)')"
+    CLI=""
+    for c in "/Applications/Karabiner-Elements.app/Contents/Helpers/karabiner_cli" \
+             "/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"; do
+        [ -x "$c" ] && { CLI="$c"; break; }
+    done
+    if [ -n "$CLI" ]; then
+        echo "  CLI      : $CLI"
+        "$CLI" --show-settings-window-guidance 2>/dev/null \
+            | grep -E 'accessibility_process_trusted|iohid_listen_event_allowed|driver_connected|karabiner_json_parse_error_message' \
+            | sort -u | sed 's/^/  /'
+    else
+        echo "  权限状态 : $(cat "$HOME/.local/share/karabiner/tmp/"*.json 2>/dev/null || echo '(无)')"
+    fi
     echo "  规则数   : $(python3 -c "
 import json,os
 p=os.path.expanduser('~/.config/karabiner/karabiner.json')

@@ -164,28 +164,32 @@ if let fh = FileHandle(forWritingAtPath: path) {
 
 在虚拟 HID 键盘层把小数键盘数字键改写为主键盘数字键，**在 Num Lock 判定之前**完成改写。
 
-规则（11 条）：
+规则（1 条规则 / 12 个映射，完整文件见 `karabiner/numpad-fix.json`）：
 
 ```json
 {
-  "description": "小键盘数字键始终输出数字 (绕过 macOS NumLock 状态机)",
+  "description": "小键盘：数字与小数点直通，Num Lock 键不干扰",
   "manipulators": [
-    { "type": "basic", "from": { "key_code": "keypad_1",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "1" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_2",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "2" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_3",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "3" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_4",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "4" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_5",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "5" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_6",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "6" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_7",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "7" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_8",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "8" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_9",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "9" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_0",       "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "0" } ] },
-    { "type": "basic", "from": { "key_code": "keypad_decimal", "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "period" } ] }
+    { "type": "basic", "from": { "key_code": "keypad_1",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "1" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_2",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "2" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_3",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "3" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_4",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "4" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_5",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "5" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_6",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "6" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_7",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "7" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_8",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "8" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_9",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "9" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_0",        "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "0" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_period",   "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "period" } ] },
+    { "type": "basic", "from": { "key_code": "keypad_num_lock", "modifiers": { "optional": ["any"] } }, "to": [ { "key_code": "vk_none" } ] }
   ]
 }
 ```
 
-**刻意不映射** `keypad_enter` / `keypad_plus` / `keypad_minus` / `keypad_multiply` / `keypad_divide`
+> `keypad_period` 是合法键名；`keypad_decimal` 不存在（会报 `unknown key_code`）。
+> 写完用 `karabiner_cli --lint-complex-modifications <file>` 校验。
+
+**刻意不映射** `keypad_enter` / `keypad_plus` / `keypad_hyphen` / `keypad_asterisk` / `keypad_slash`
 —— Excel 等表格软件依赖小键盘回车。
 
 写入位置（两个都写，UI 可见且实际生效）：
@@ -225,30 +229,37 @@ event.flags = event.flags.remove(.maskNumericPad)
 
 ### Karabiner 特有的坑
 
-1. **LaunchDaemon plist 的真实文件名带 `-Daemon` 后缀**：
-   `org.pqrs.service.daemon.Karabiner-VirtualHIDDevice-Daemon.plist`
-   （不是 `...Karabiner-VirtualHIDDevice.plist`）
+#### 16.99+（2026-11 实测，当前安装包）
 
-2. **必须先装守护进程，Karabiner 才能工作**。只装 App 不装 LaunchDaemon 时，
-   `karabiner_cli --list-system-variables` 会报 `asio.system:13`，
-   日志里满是 `core_service_daemon_client connect_failed`。
-
-3. **权限状态校验文件**：`~/.local/share/karabiner/tmp/*.json`
-
-   ```json
-   {"accessibility_process_trusted":true,"iohid_listen_event_allowed":true}
-   ```
-
-   两个字段都必须为 `true`。
-
-4. **虚拟 HID 驱动是 DriverKit 扩展**：
-   `/Library/SystemExtensions/*/org.pqrs.Karabiner-DriverKit-VirtualHIDDevice.dext`
-
-5. **配置写入后需重载**：
+1. **键名别猜**：小数点键是 `keypad_period`，**不是** `keypad_decimal`（后者不存在，Karabiner 会报
+   `unknown key_code` 并跳过该条映射）。改完规则务必校验：
 
    ```bash
-   launchctl kickstart -k system/org.pqrs.service.daemon.Karabiner-Core-Service
+   "/Applications/Karabiner-Elements.app/Contents/Helpers/karabiner_cli" \
+       --lint-complex-modifications karabiner/numpad-fix.json
    ```
+
+2. **CLI 路径变了**：`/Applications/Karabiner-Elements.app/Contents/Helpers/karabiner_cli`
+   （16.3.x 及更早在 `/Library/Application Support/org.pqrs/Karabiner-Elements/bin/`）。
+
+3. **后台服务由安装包注册**：v3 privileged daemons 由 pkg 安装，16.99 已不再提供可手工复制的
+   LaunchDaemon plist；不要沿用旧教程里的 `cp .../LaunchDaemons/*.plist`。
+
+4. **状态自检用 CLI**：`karabiner_cli --show-settings-window-guidance` 直接输出 JSON，
+   包含 `accessibility_process_trusted`、`iohid_listen_event_allowed`、`driver_connected`、
+   `karabiner_json_parse_error_message` 等字段；比旧的 `~/.local/share/karabiner/tmp/*.json` 更可靠。
+
+5. **配置热重载**：写入 `karabiner.json` 后 Karabiner 自动重载，无需 `launchctl kickstart`。
+
+6. **虚拟 HID 驱动**：DriverKit 扩展位于
+   `/Library/SystemExtensions/*/org.pqrs.Karabiner-DriverKit-VirtualHIDDevice.dext`。
+
+#### 旧版（16.3.x 及更早）
+
+- LaunchDaemon plist 文件名带 `-Daemon` 后缀（`...Karabiner-VirtualHIDDevice-Daemon.plist`）；
+  只装 App 不装服务时，`karabiner_cli --list-system-variables` 会报 `asio.system:13`。
+- 权限状态文件：`~/.local/share/karabiner/tmp/*.json`，两个字段都必须为 `true`。
+- 配置重载可用 `launchctl kickstart -k system/org.pqrs.service.daemon.Karabiner-Core-Service`。
 
 ---
 

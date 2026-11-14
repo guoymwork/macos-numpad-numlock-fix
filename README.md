@@ -4,6 +4,8 @@
 
 本仓库记录这一问题的完整根因分析、经过验证的解决方案，以及可复用的安装脚本与 AI 协作提示词。
 
+> **2026-11-14 更新**：修正了旧规则中不存在的键名 `keypad_decimal`（Karabiner 会报 `unknown key_code`，导致小数点映射静默失效），改为正确的 `keypad_period`；新增屏蔽 Num Lock 键；脚本适配 Karabiner-Elements 16.99+ 的新路径（`Contents/Helpers/karabiner_cli`、v3 后台服务）。详见文末[更新记录](#更新记录)。
+
 ---
 
 ## 目录
@@ -17,6 +19,7 @@
 - [设计取舍](#设计取舍)
 - [故障排查](#故障排查)
 - [卸载](#卸载)
+- [更新记录](#更新记录)
 - [参考资料](#参考资料)
 
 ---
@@ -57,7 +60,7 @@
 |---|---|
 | 操作系统 | macOS 26.7.2 (Build 25G332)，Darwin 内核 25.6.0，arm64 |
 | 输入法 | 简体拼音（SCIM Shuangpin） |
-| 第三方键盘软件 | 无（Karabiner / BetterTouchTool / Logi Options 均未安装） |
+| 第三方键盘软件 | 初测时无（Karabiner / BetterTouchTool / Logi Options 均未安装）；复测时安装 Karabiner-Elements 16.99.22 beta |
 | 辅助功能 | Mouse Keys / Slow Keys / Sticky Keys 全部关闭 |
 
 ### 键盘 HID 描述符要点
@@ -112,12 +115,17 @@ macOS 对非 Apple 键盘的 Num Lock 处理与 Windows 有本质差异：
 ```
 keypad_1 … keypad_9  →  1 … 9
 keypad_0             →  0
-keypad_decimal       →  period
+keypad_period        →  period   (小数点输出 .)
+keypad_num_lock      →  vk_none  (屏蔽 Num Lock 键, 防止误切方向键/干扰应用)
 ```
 
-共 11 条规则。
+共 **12 个映射**。
 
-**刻意不映射** `keypad_enter` / `keypad_plus` / `keypad_minus` / `keypad_multiply` / `keypad_divide` —— 保留小键盘语义，Excel 等表格软件依赖小键盘回车。
+> ⚠️ 键名必须是 `keypad_period`，不是 `keypad_decimal`。后者不是 Karabiner 的合法 key_code，
+> 导入时会报 `unknown key_code`，且该条映射会被跳过——这是旧版规则里小数点无效的原因。
+> 可用 `karabiner_cli --lint-complex-modifications karabiner/numpad-fix.json` 校验。
+
+**刻意不映射** `keypad_enter` / `keypad_plus` / `keypad_hyphen` / `keypad_asterisk` / `keypad_slash` —— 保留小键盘语义，Excel 等表格软件依赖小键盘回车。
 
 ### 为什么是 Karabiner 而不是别的方案
 
@@ -148,10 +156,10 @@ cd macos-numpad-numlock-fix
 安装脚本会：
 
 1. 检测并安装 Karabiner-Elements（若未安装，自动下载官方 DMG 并引导安装）
-2. 安装 Core-Service 与 VirtualHIDDevice 两个 LaunchDaemon
-3. 写入 11 条重映射规则到 `~/.config/karabiner/karabiner.json`
-4. 检查辅助功能与 HID 监听权限状态
-5. 输出验证指引
+2. 检查 Core-Service / 虚拟 HID 驱动是否就绪（服务由官方安装包注册，无需手工装 LaunchDaemon）
+3. 写入 12 个映射到 `~/.config/karabiner/karabiner.json`（自动清理旧版规则，避免叠加）
+4. 把规则同步到 `assets/complex_modifications/numpad-fix.json`，可在 Karabiner UI 中查看
+5. 用 `karabiner_cli` 校验规则，并检查辅助功能 / 输入监控权限
 
 ---
 
@@ -188,7 +196,7 @@ HID 报告 ──► G610 固件 (NumLock=OFF) ──► usage 0x59 (Keypad 1)
 
 Karabiner 走的是**虚拟 HID 设备**路径（创建虚拟键盘并在最前端拦截改写），与真实设备解耦，对固件差异不敏感，因此更可靠。
 
-> 如果你的环境中 `hidutil` 有效，也可以只用它，无需安装 Karabiner。本仓库的 `scripts/install-hidutil.sh` 提供了这条路径。
+> 如果你的环境中 `hidutil` 有效，也可以只用它，无需安装 Karabiner；本仓库只维护 Karabiner 路线。
 
 ### 规则文件的位置
 
@@ -197,7 +205,7 @@ Karabiner 走的是**虚拟 HID 设备**路径（创建虚拟键盘并在最前�
 | 文件 | 作用 |
 |---|---|
 | `~/.config/karabiner/karabiner.json` | **实际生效**的规则（profile: Default） |
-| `~/.config/karabiner/assets/complex_modifications/numpad-fix.json` | 导入型规则文件，可在 Karabiner UI 中勾选启用/禁用 |
+| `~/.config/karabiner/assets/complex_modifications/numpad-fix.json` | 可导入的规则文件（`title` + `rules` 格式），可在 Karabiner UI 中勾选启用/禁用 |
 
 两者都写入，确保 UI 中可见可管理，同时保证实际生效。
 
@@ -213,14 +221,22 @@ Karabiner 走的是**虚拟 HID 设备**路径（创建虚拟键盘并在最前�
 # 1. Karabiner 是否在运行
 pgrep -fl Karabiner
 
-# 2. 权限是否授予（两个都必须是 true）
-cat ~/.local/share/karabiner/tmp/*json
+# 2. 权限/驱动/配置状态 (16.99+ 用 Helpers 路径; 旧版在 bin/)
+CLI="/Applications/Karabiner-Elements.app/Contents/Helpers/karabiner_cli"
+"$CLI" --show-settings-window-guidance
 
-# 3. 规则是否已加载
-python3 -c "import json;print(len(json.load(open('$HOME/.config/karabiner/karabiner.json'))['profiles'][0]['complex_modifications']['rules']))"
+# 3. 规则是否已加载 (应为 1 条规则 / 12 个映射)
+python3 - <<'PY'
+import json, os
+p = os.path.expanduser("~/.config/karabiner/karabiner.json")
+d = json.load(open(p))
+prof = next(x for x in d["profiles"] if x.get("selected"))
+rules = prof.get("complex_modifications", {}).get("rules", [])
+print(len(rules), "条规则 /", sum(len(r["manipulators"]) for r in rules), "个映射")
+PY
 
-# 4. 后台服务是否注册
-launchctl print system | grep -i karabiner
+# 4. 校验规则文件本身
+"$CLI" --lint-complex-modifications karabiner/numpad-fix.json
 ```
 
 ### 修改规则
@@ -231,6 +247,8 @@ launchctl print system | grep -i karabiner
 open -a Karabiner-Elements
 ```
 
+改完建议用 `karabiner_cli --lint-complex-modifications` 校验，可提前发现 `keypad_decimal` 这类无效键名。
+
 ### 保留小键盘语义
 
 若希望小键盘数字键仍被识别为「小键盘」（部分 Excel 场景需要），改用 `to` 中带 `key_code` + 保留原始 usage 的写法，或只对小键盘**运算符**做扩展映射，数字键交由系统处理。
@@ -240,34 +258,37 @@ open -a Karabiner-Elements
 ## 卸载
 
 ```bash
-./scripts/uninstall.sh
+./scripts/uninstall.sh          # 只移除映射规则
+./scripts/uninstall.sh --full   # 额外给出卸载 Karabiner 本体的指引
 ```
 
-或手动：
+手动删除规则：编辑 `~/.config/karabiner/karabiner.json`，删除 description 为
+「小键盘：数字与小数点直通，Num Lock 键不干扰」的规则，保存后自动重载。
+
+彻底卸载 Karabiner-Elements（如需）：
 
 ```bash
-# 移除规则
-python3 - <<'PY'
-import json, os, pathlib
-p = pathlib.Path(os.path.expanduser("~/.config/karabiner/karabiner.json"))
-d = json.loads(p.read_text())
-for prof in d.get("profiles", []):
-    prof.get("complex_modifications", {}).pop("rules", None)
-p.write_text(json.dumps(d, ensure_ascii=False, indent=2))
-PY
-
-# 移除守护进程（需管理员权限）
-sudo rm -f /Library/LaunchDaemons/org.pqrs.service.daemon.Karabiner-Core-Service.plist \
-           /Library/LaunchDaemons/org.pqrs.service.daemon.Karabiner-VirtualHIDDevice-Daemon.plist
-sudo launchctl bootout system/org.pqrs.service.daemon.Karabiner-Core-Service 2>/dev/null
+sudo "/Applications/Karabiner-Elements.app/Contents/Resources/uninstall.sh"
 ```
+
+---
+
+## 更新记录
+
+### 2026-11-14
+
+- **修正无效键名**：规则里的 `keypad_decimal` 改为 `keypad_period`。前者不是 Karabiner 合法 `key_code`，校验会报 `unknown key_code`，小数点映射因此不生效。
+- **新增屏蔽 Num Lock**：`keypad_num_lock` → `vk_none`，避免该键在个别应用（虚拟机、远程桌面）里触发意外状态；共 **12 个映射**。
+- **规则文件改为可导入格式**（`title` + `rules`），`assets/complex_modifications/numpad-fix.json` 现在可直接在 Karabiner UI 中启用/禁用。
+- **脚本适配 Karabiner 16.99+**：使用 `Contents/Helpers/karabiner_cli`、v3 后台服务，不再手工复制 LaunchDaemon plist；安装/卸载脚本会自动清理旧版规则描述，避免新旧规则叠加。
+- 文档补充 `karabiner_cli --lint-complex-modifications` 校验方法。
 
 ---
 
 ## 参考资料
 
 - [Karabiner-Elements 官网](https://karabiner-elements.pqrs.org/)
-- [Karabiner-Elements 复杂修饰键文档](https://karabiner-elements.pqrs.org/document/complex_modifications)
+- [Karabiner-Elements 复杂修饰键文档](https://karabiner-elements.pqrs.org/docs/manual/configuration/configure-complex-modifications/)
 - [Apple 官方：若数字小键盘不工作](https://support.apple.com/guide/mac-help/if-a-numeric-keypad-doesnt-work-mchlp2366/mac)
 - [USB HID Usage Tables](https://usb.org/document-library/hid-usage-tables-1-6) — Keyboard/Keypad Page (0x07) usage 编号
 - [Apple 开源：HIDEventSystem](https://github.com/apple-oss-distributions/hid)

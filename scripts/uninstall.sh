@@ -2,15 +2,17 @@
 #
 # 卸载小键盘修复方案
 #
-#   ./scripts/uninstall.sh
-#
-# 默认只移除映射规则; 传 --full 可一并移除 Karabiner-Elements 本体与守护进程。
+#   ./scripts/uninstall.sh          仅移除映射规则
+#   ./scripts/uninstall.sh --full   同时引导卸载 Karabiner-Elements 本体
 #
 set -uo pipefail
 
+APP="/Applications/Karabiner-Elements.app"
 CONFIG_FILE="$HOME/.config/karabiner/karabiner.json"
 ASSET_FILE="$HOME/.config/karabiner/assets/complex_modifications/numpad-fix.json"
-RULE_DESC="小键盘数字键始终输出数字 (绕过 macOS NumLock 状态机)"
+
+NEW_DESC="小键盘：数字与小数点直通，Num Lock 键不干扰"
+LEGACY_DESC="小键盘数字键始终输出数字 (绕过 macOS NumLock 状态机)"
 
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; BLUE=$'\033[0;34m'; RESET=$'\033[0m'
 ok()   { printf "%s✓%s %s\n" "$GREEN" "$RESET" "$1"; }
@@ -18,32 +20,28 @@ warn() { printf "%s!%s %s\n" "$YELLOW" "$RESET" "$1"; }
 info() { printf "%s→%s %s\n" "$BLUE" "$RESET" "$1"; }
 step() { printf "\n%s▸ %s%s\n" "$BLUE" "$1" "$RESET"; }
 
-run_privileged() {
-    local script="$1"
-    if osascript -e "do shell script \"$script\" with administrator privileges" >/dev/null 2>&1; then
-        return 0
-    fi
-    sudo -v 2>/dev/null && sudo sh -c "$script"
-}
-
 step "移除映射规则"
 
-python3 - "$CONFIG_FILE" "$RULE_DESC" <<'PY'
+python3 - "$CONFIG_FILE" "$NEW_DESC" "$LEGACY_DESC" <<'PY'
 import json, os, sys, pathlib
-config_path, desc = sys.argv[1], sys.argv[2]
+
+config_path, new_desc, legacy_desc = sys.argv[1], sys.argv[2], sys.argv[3]
 p = pathlib.Path(os.path.expanduser(config_path))
 if not p.exists():
     print("   配置文件不存在, 跳过")
     sys.exit(0)
+
 cfg = json.loads(p.read_text())
-n = 0
+removed = 0
 for prof in cfg.get("profiles", []):
-    rules = prof.get("complex_modifications", {}).get("rules", [])
-    keep = [r for r in rules if r.get("description") != desc]
-    n += len(rules) - len(keep)
-    prof["complex_modifications"]["rules"] = keep
-p.write_text(json.dumps(cfg, ensure_ascii=False, indent=2))
-print(f"   已移除 {n} 条规则")
+    cm = prof.get("complex_modifications", {})
+    rules = cm.get("rules", [])
+    keep = [r for r in rules if r.get("description") not in (new_desc, legacy_desc)]
+    removed += len(rules) - len(keep)
+    cm["rules"] = keep
+
+p.write_text(json.dumps(cfg, ensure_ascii=False, indent=4) + "\n")
+print(f"   已移除 {removed} 条规则")
 PY
 
 if [ -f "$ASSET_FILE" ]; then
@@ -51,17 +49,23 @@ if [ -f "$ASSET_FILE" ]; then
     ok "导入型规则文件已删除"
 fi
 
-info "重载 Karabiner 配置 ..."
-run_privileged "launchctl kickstart -k system/org.pqrs.service.daemon.Karabiner-Core-Service 2>/dev/null"
+info "Karabiner 会自动重载配置, 无需重启"
 
 if [ "${1:-}" = "--full" ]; then
-    step "移除 Karabiner-Elements 本体"
-    run_privileged "launchctl bootout system/org.pqrs.service.daemon.Karabiner-Core-Service 2>/dev/null; \
-                    launchctl bootout system/org.pqrs.service.daemon.Karabiner-VirtualHIDDevice-Daemon 2>/dev/null; \
-                    rm -f /Library/LaunchDaemons/org.pqrs.service.daemon.Karabiner-*.plist; \
-                    rm -rf '/Library/Application Support/org.pqrs/Karabiner-Elements'; \
-                    rm -rf '/Applications/Karabiner-Elements.app'"
-    ok "已移除"
+    step "卸载 Karabiner-Elements 本体"
+    if [ -x "$APP/Contents/Resources/uninstall.sh" ]; then
+        cat <<EOF
+
+请执行以下命令完成彻底卸载 (会要求输入管理员密码):
+
+  sudo "$APP/Contents/Resources/uninstall.sh"
+
+或打开 Karabiner-Elements → Settings → Misc → Uninstall Karabiner-Elements。
+
+EOF
+    else
+        warn "未找到应用内卸载脚本, 请手动删除 $APP 及 /Library/Application Support/org.pqrs"
+    fi
 fi
 
 printf "\n%s卸载完成%s\n" "$GREEN" "$RESET"

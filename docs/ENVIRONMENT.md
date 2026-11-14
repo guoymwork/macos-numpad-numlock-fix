@@ -22,9 +22,13 @@
 | **鼠标** | 型号 | 罗技 G502 HERO |
 | **扩展坞** | 芯片 | GenesysLogic USB 3.2 Hub |
 | **软件** | 输入法 | 简体拼音（SCIM Shuangpin） |
-| | 第三方键盘软件 | 无 |
+| | 第三方键盘软件 | 初测时无；复测时安装 Karabiner-Elements 16.99.22 beta |
 | | 辅助功能 | Mouse Keys / Slow Keys / Sticky Keys 均关闭 |
-| **Karabiner** | 版本 | 16.3.0 |
+| **Karabiner** | 版本 | 16.3.0（初测）／16.99.22 beta（2026-11-14 复测，含简体中文界面） |
+
+> 2026-11-14 复测：在 macOS 26.7.2 + Karabiner-Elements 16.99.22 beta 上，把规则中的
+> `keypad_decimal` 修正为 `keypad_period`、并新增 `keypad_num_lock → vk_none` 后，
+> 小键盘 0-9 与小数点均正常输出，Num Lock 键不再干扰。
 
 ## 键盘 HID 结构
 
